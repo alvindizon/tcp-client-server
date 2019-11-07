@@ -1,7 +1,12 @@
 package com.alvindizon.tcpclientserver.features.clientserver;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.databinding.DataBindingUtil;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentPagerAdapter;
 import androidx.lifecycle.ViewModelProvider;
 
 import android.app.ActivityManager;
@@ -16,8 +21,15 @@ import com.alvindizon.tcpclientserver.core.Actions;
 import com.alvindizon.tcpclientserver.core.ViewModelFactory;
 import com.alvindizon.tcpclientserver.databinding.ActivityMainBinding;
 import com.alvindizon.tcpclientserver.di.Injector;
+import com.alvindizon.tcpclientserver.features.client.ClientFragment;
+import com.alvindizon.tcpclientserver.features.server.ServerFragment;
 
 import javax.inject.Inject;
+
+import static com.alvindizon.tcpclientserver.core.Const.LAST_TAB_POS;
+import static com.alvindizon.tcpclientserver.core.Const.PAGE_COUNT;
+import static com.alvindizon.tcpclientserver.core.Const.TAB_TITLE_1;
+import static com.alvindizon.tcpclientserver.core.Const.TAB_TITLE_2;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -33,29 +45,23 @@ public class MainActivity extends AppCompatActivity {
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
         Injector.getViewModelComponent().inject(this);
         viewModel = new ViewModelProvider(this, viewModelFactory).get(MainViewModel.class);
-        viewModel.observeReceivedTcpMsg().observe(this, message -> binding.receivedData.setText(message));
-        binding.button.setOnClickListener(v -> {
-            if(!TextUtils.isEmpty(binding.outgoingData.getText().toString())) {
-                viewModel.sendTcpMessage(binding.outgoingData.getText().toString());
-            }
-        });
+
+        binding.viewpager.setAdapter(new CustomFragmentPagerAdapter(getSupportFragmentManager()));
+        binding.slidingTabs.setupWithViewPager(binding.viewpager);
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        if(!isMyServiceRunning(TcpService.class)) {
-            doTcpServiceAction(Actions.START);
-        }
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt(LAST_TAB_POS, binding.slidingTabs.getSelectedTabPosition());
     }
 
     @Override
-    protected void onPause() {
-        super.onPause();
-        if(isMyServiceRunning(TcpService.class)) {
-            doTcpServiceAction(Actions.STOP);
-        }
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        binding.viewpager.setCurrentItem(savedInstanceState.getInt(LAST_TAB_POS));
     }
+
 
     public boolean isMyServiceRunning(Class<?> serviceClass) {
         ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
@@ -73,6 +79,35 @@ public class MainActivity extends AppCompatActivity {
         Intent intent = new Intent(getApplicationContext(), TcpService.class);
         intent.setAction(action.name());
         startService(intent);
+    }
+
+    class CustomFragmentPagerAdapter extends FragmentPagerAdapter {
+        private String tabTitles[] = new String[] {TAB_TITLE_1, TAB_TITLE_2};
+
+        public CustomFragmentPagerAdapter(@NonNull FragmentManager fm) {
+            super(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT);
+        }
+
+        @NonNull
+        @Override
+        public Fragment getItem(int position) {
+            if(position == 0) {
+                return new ServerFragment();
+            } else {
+                return new ClientFragment();
+            }
+        }
+
+        @Override
+        public int getCount() {
+            return PAGE_COUNT;
+        }
+
+        @Nullable
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return tabTitles[position];
+        }
     }
 
 }

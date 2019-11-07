@@ -4,6 +4,7 @@ package com.alvindizon.tcpclientserver.data;
 import android.content.Context;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.util.Log;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -23,6 +24,7 @@ import static android.content.Context.WIFI_SERVICE;
 
 @Singleton
 public class TcpRepository {
+    public static final String TAG = TcpRepository.class.getSimpleName();
 
     private final TcpHelper tcpHelper;
     private final Context context;
@@ -36,7 +38,7 @@ public class TcpRepository {
     }
 
     public Completable startTcpListen(int port) {
-        return tcpHelper.init(port)
+        return tcpHelper.initServer(port)
             .andThen(Observable.interval(1000, TimeUnit.MILLISECONDS).flatMap(time -> tcpHelper.receive()))
             .flatMapCompletable(message -> {
                 receivedMessage.onNext(message);
@@ -76,5 +78,25 @@ public class TcpRepository {
 
     public Completable sendTcpMessage(String message) {
         return tcpHelper.sendMessage(message);
+    }
+
+    public Completable initClient(String ipAddress, int port) {
+        return tcpHelper.initClient(ipAddress, port);
+    }
+
+    public Completable startClientListen() {
+        return Observable.interval(1000, TimeUnit.MILLISECONDS).flatMap(time -> tcpHelper.receive())
+            .flatMapCompletable(message -> {
+                Log.d(TAG, "startClientListen: received message");
+                receivedMessage.onNext(message);
+                return Completable.complete();
+            })
+            .retryWhen(errors -> errors.flatMap(error -> {
+                Log.d(TAG, "startClientListen: error");
+                if(!(error instanceof TcpDisconnectedException)) {
+                    return Flowable.just(this);
+                }
+                return Flowable.error(error);
+            })); // retry listening if new message is received
     }
 }

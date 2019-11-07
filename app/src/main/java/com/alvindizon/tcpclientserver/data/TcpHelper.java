@@ -1,30 +1,21 @@
 package com.alvindizon.tcpclientserver.data;
 
-import android.content.Context;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
 import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import io.reactivex.Completable;
 import io.reactivex.Observable;
-import io.reactivex.subjects.PublishSubject;
-
-import static android.content.Context.WIFI_SERVICE;
 
 @Singleton
 public class TcpHelper {
@@ -38,32 +29,49 @@ public class TcpHelper {
     private BufferedReader input;
 
 
-
     @Inject
     public TcpHelper() {
     }
 
-    public Completable init( int port) {
+    public Completable initServer(int port) {
         return Completable.create(emitter -> {
             try {
+                Log.d(TAG, "initServer: start");
 //                inetAddress = InetAddress.getByName(ipAddr);
-                // init socket for listening purposes
+                // initServer socket for listening purposes
                 if(serverSocket == null) {
+                    Log.d(TAG, "initServer: serversocket null");
                     serverSocket = new ServerSocket(port);
                 }
                 clientSocket = serverSocket.accept();
 
                 output = new PrintWriter(clientSocket.getOutputStream(), true);
                 input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                Log.d(TAG, "init() success");
+                Log.d(TAG, "initServer() success");
 
             } catch (Exception e) {
-                Log.e(TAG, "init exception: ",  e);
+                Log.e(TAG, "initServer exception: ",  e);
                 emitter.tryOnError(e);
             }
             emitter.onComplete();
         });
     }
+
+    public Completable initClient(String ipAddress, int port) {
+        return Completable.create(emitter -> {
+            try {
+                Log.d(TAG, "initClient: ");
+                clientSocket = new Socket(ipAddress, port);
+                output = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()), true);
+                input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                emitter.onComplete();
+            } catch (Exception e) {
+                e.printStackTrace();
+                emitter.tryOnError(e);
+            }
+        });
+    }
+
     // BufferedReader.readLine() will only terminate if it receives a newline
     public Observable<String> receive() {
         return Observable.create(emitter -> {
@@ -71,6 +79,7 @@ public class TcpHelper {
                 Log.d(TAG, "receive() start");
                 String message = input.readLine();
                 if(!TextUtils.isEmpty(message)) {
+                    Log.d(TAG, "receive: " + message);
                     emitter.onNext(message);
                 } else {
                     Log.d(TAG, "disconnected");
@@ -99,6 +108,7 @@ public class TcpHelper {
         return Completable.create(emitter -> {
             try {
                 serverSocket.close();
+                serverSocket = null;
                 emitter.onComplete();
             } catch (Exception e) {
                 e.printStackTrace();
